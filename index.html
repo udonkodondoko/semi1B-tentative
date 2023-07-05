@@ -1,0 +1,191 @@
+<html lang="ja">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="Content-Style-Type" content="text/css">
+<meta http-equiv="Content-Script-Type" content="text/javascript">
+<title>Yahoo!JAPAN 自然言語理解Web APIとJSONPを使った音声対話で位置情報を検索するプログラム</title>
+</head>
+<body>
+
+<h1>Yahoo!JAPAN 自然言語理解Web APIとJSONPを使った音声対話で位置情報を検索するプログラム</h1>
+
+<h3>地名が認識されれば、自動的に気象情報検索プログラムが別タブで開きます。</h3>
+
+<p>
+参考：<br>
+JSONPを使ってJavaScriptだけでマッシュアップ：https://techblog.yahoo.co.jp/javascript/jsonpjavascript/<br>
+Yahoo!ジオコーダAPI: https://developer.yahoo.co.jp/webapi/map/openlocalplatform/v1/geocoder.html
+</p>
+
+<p>
+<button id="startButton">start</button>
+<button id="stopButton">stop</button>
+</p>
+
+<p>
+<div id="resultOutput"></div>
+</p>
+
+<p>
+<div id="AddressOutput"></div>
+</p>
+
+<script>
+const URL = "https://jlp.yahooapis.jp/NLUService/V2/analyze?appid="; // APIのリクエストURL
+const APPID = "dj00aiZpPXFuRXR5NzF2VXN5RiZzPWNvbnN1bWVyc2VjcmV0Jng9MDk-"; // あなたのアプリケーションID
+const queryURL = URL + APPID;
+
+const startButton = document.querySelector('#startButton'); // 開始ボタン
+const stopButton = document.querySelector('#stopButton'); // 停止ボタン
+const resultOutput = document.querySelector('#resultOutput'); // 結果出力エリア
+
+if (!'SpeechSynthesisUtterance' in window) {
+    alert("あなたのブラウザはSpeech Synthesis APIに未対応です。");
+}
+const tts = new SpeechSynthesisUtterance(); // TTSインスタンスを生成
+//tts.text = textForm.value; // テキストを設定
+tts.lang = "ja-JP"; // 言語(日本語)、英語の場合はen-US
+tts.rate = 1.0; // 速度
+tts.pitch = 1.0; // 声の高さ
+tts.volume = 1.0; // 音量
+
+SpeechRecognition = webkitSpeechRecognition || SpeechRecognition;
+if (!'SpeechRecognition' in window) {
+    alert("あなたのブラウザはSpeech Recognition APIに未対応です。");
+}
+
+const asr = new SpeechRecognition(); // ASRインスタンスを生成
+asr.lang = "ja-JP"; // 言語（日本語）
+asr.interimResults = true; // 途中結果出力をオン
+asr.continuous = true; // 継続入力をオン
+
+let output = ''; // 出力
+let transcript = ''; // 音声認識結果の文字列
+
+// 認識結果が出力されたときのイベントハンドラ
+asr.onresult = function(event){
+    transcript = event.results[event.resultIndex][0].transcript; // 結果文字列
+
+    let output_not_final = '';
+    if (event.results[event.resultIndex].isFinal) { // 結果が確定（Final）のとき
+        asr.abort(); // 音声認識を停止
+
+        // HTTPリクエストの準備
+        var postdata = {
+            "id": "1234-1", // JSON-RPC2.0 id、値は任意で、指定した値がレスポンスのidになる。
+            "jsonrpc" : "2.0", // APIで固定
+            "method" : "jlp.nluservice.analyze", // APIで固定
+            "params" : { "q" : transcript }, // 解析対象のテキスト 
+        };
+        var jsondata = JSON.stringify(postdata);
+
+        const request = new XMLHttpRequest();
+        request.open('POST', queryURL, true);
+        request.setRequestHeader('Content-Type', 'application/json');
+        request.responseType = 'json'; // レスポンスはJSON形式に変換
+
+        // HTTPの状態が変化したときのイベントハンドラ
+        request.onreadystatechange = function() {
+            if (this.readyState == 4 && this.status == 200) {
+                // readyState == 4 操作完了
+                // status == 200 リクエスト成功（HTTPレスポンス）
+
+                let res = this.response; // 結果はJSON形式
+
+                Object.keys(res.result).forEach(function (key) {
+                    console.log(key + ": " + res.result[key])
+                });
+
+                // METHOD が SEARCH のときのみ
+                if(res.result.METHOD == "SEARCH"){
+                    var answer = res.result.PARAM_TEXT_TTS || res.result.PARAM_TEXT;
+                    tts.text = transcript + 'の位置情報を検索します';
+
+                    // 再生が終了（end）ときのイベントハンドラ（終了したときに実行される）
+                    tts.onend = function(event){
+                        asr.start(); // 音声認識を再開
+                    }
+
+                    output += transcript + ' => ' + transcript + 'の位置情報を検索します' + '<br>';
+                    resultOutput.innerHTML = output;
+                    speechSynthesis.speak(tts); // 再生
+
+                    showAddress();
+                }else{
+                    var answer = res.result.PARAM_TEXT_TTS || res.result.PARAM_TEXT;
+                    tts.text = '地名を答えてください';
+
+                    // 再生が終了（end）ときのイベントハンドラ（終了したときに実行される）
+                    tts.onend = function(event){
+                        asr.start(); // 音声認識を再開
+                    }
+
+                    output += transcript + ' => ' + '地名を答えてください' + '<br>';
+                    resultOutput.innerHTML = output;
+                    speechSynthesis.speak(tts); // 再生
+                }
+            }
+        };
+
+        // HTTPリクエストの実行
+        request.send(jsondata);
+
+    } else { // 結果がまだ未確定のとき
+        output_not_final = '<span style="color:#ddd;">' + transcript + '</span>';
+        resultOutput.innerHTML = output + output_not_final;
+    }
+};
+
+//住所の情報を表示する
+function showAddress() {
+  //var appid = 'あなたのアプリケーションID';
+  var appid = 'dj00aiZpPXFuRXR5NzF2VXN5RiZzPWNvbnN1bWVyc2VjcmV0Jng9MDk-';
+  var query = transcript;
+  var url = "https://map.yahooapis.jp/geocode/V1/geoCoder?appid=" + appid + "&query=" + encodeURI( query ) + "&output=json&callback=showResult";
+  callJSONP( url );
+}
+
+//JSONPを実行する関数
+function callJSONP(url) {
+  console.log(url);
+  var target = document.createElement('script');
+  target.charset = 'utf-8';
+  target.src = url;
+  document.body.appendChild(target);
+}
+
+//JSONPの結果として実行される関数
+function showResult(result) {
+  let output = '';
+	window.open( 'index2.html' );
+
+  //console.log(result);
+  console.log(result.Feature);
+  for(let i = 0; i < result.Feature.length; i++){
+    console.log(result.Feature[i]);
+    let name = result.Feature[i].Name;
+    let location = result.Feature[i].Geometry.Coordinates;
+    output += name + "/" + location + "<br>";
+    AddressOutput.innerHTML = output;
+  }
+}
+
+
+// 開始ボタンのイベントハンドラ
+startButton.addEventListener('click', function() {
+    asr.start();
+})
+
+// 停止ボタンのイベントハンドラ
+stopButton.addEventListener('click', function() {
+    asr.abort();
+    asr.stop();
+})</script>
+
+<!-- Yahoo!JAPANのAPIを利用したときはクレジット表記が必要 -->
+<p>
+Web Services by Yahoo! JAPAN （https://developer.yahoo.co.jp/sitemap/）
+</p>
+</body>
+</html>

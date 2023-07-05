@@ -1,0 +1,76 @@
+<html lang="ja">
+<head>
+<meta http-equiv="content-script-type" content="text/javascript">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>Yahoo! JAPAN 気象情報API</title>
+</head>
+<body>
+
+<h1>Yahoo! JAPAN 気象情報API</h1>
+
+<p>
+参考：<br>
+気象情報API https://developer.yahoo.co.jp/webapi/map/openlocalplatform/v1/weather.html
+</p>
+
+<p>
+先の音声対話で得られた緯度と経度の情報を下のボックスに入力してください。
+</p>
+<input name="query" id="query" value="" >
+<input type="button" value="実行" onclick="showWeather()">
+
+<p>
+<div id="resultOutput"></div>
+</p>
+
+<script type="text/javascript">
+<!--
+function showWeather() {
+  //var appid = 'あなたのアプリケーションID';
+  var appid = 'dj00aiZpPXFuRXR5NzF2VXN5RiZzPWNvbnN1bWVyc2VjcmV0Jng9MDk-';
+  var query = document.getElementById('query').value;
+  var url = "https://map.yahooapis.jp/weather/V1/place?appid=" + appid + "&coordinates=" + encodeURI( query ) + "&output=json&callback=showResult";
+  callJSONP( url );
+}
+
+//JSONPを実行する関数
+function callJSONP(url) {
+  console.log(url);
+  var target = document.createElement('script');
+  target.charset = 'utf-8';
+  target.src = url;
+  document.body.appendChild(target);
+}
+
+//JSONPの結果として実行される関数
+function showResult( result ) {
+  let output = '';
+
+  console.log(result);
+  
+  if(result.ResultInfo.Count > 0){
+	let name = result.Feature[0].Name;
+	console.log(name);
+	output += "<h2>" + name + "</h2>";
+	
+	for(let i=0; i < result.Feature[0].Property.WeatherList.Weather.length; i++){
+		let weather_type = result.Feature[0].Property.WeatherList.Weather[i].Type;
+		let weather_date = result.Feature[0].Property.WeatherList.Weather[i].Date;
+		let weather_rainfall = result.Feature[0].Property.WeatherList.Weather[i].Rainfall;
+		output += weather_type + "/" + weather_date + "/" + weather_rainfall + "<br>";
+	}
+  }else{
+  	output = "not found";
+  }
+  resultOutput.innerHTML = output;
+  
+}
+-->
+</script>
+
+<!-- Yahoo!JAPANのAPIを利用したときはクレジット表記が必要 -->
+<p>
+Web Services by Yahoo! JAPAN （https://developer.yahoo.co.jp/sitemap/）
+</p>
+</body>
+</html>
